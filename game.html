@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>body{margin:0;font-size:14px}img{max-width:100%}</style>
+</head>
+<body>
+<title>回收吧！債券火箭</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<style>
+/* Layout: full-bleed 3D canvas; mission-control HUD floats on top; start/result panels centered over the scene */
+:root{
+  --ink:#07101f;
+  --panel:rgba(8,18,36,.74);
+  --line:rgba(150,185,230,.24);
+  --text:#e9f0fa;
+  --mute:#93a8c6;
+  --burn:#ff7a2f;
+  --coin:#f4c542;
+  --safe:#4fd6a0;
+  --warn:#ffb02e;
+  --fail:#ff4d5e;
+  --f-display:"Chakra Petch","Noto Sans TC",system-ui,sans-serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;}
+html,body{height:100%;}
+[hidden]{display:none!important;}
+body{background:var(--ink);color:var(--text);font-family:var(--f-body);overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:none;}
+#c{position:fixed;inset:0;width:100%;height:100%;display:block;}
+#ui{position:fixed;inset:0;pointer-events:none;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(env(safe-area-inset-top,0px) + 12px) calc(env(safe-area-inset-bottom,0px) + 16px);
+  display:flex;flex-direction:column;}
+
+/* HUD */
+#hud{display:flex;gap:10px;align-items:flex-start;}
+.readouts{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;gap:8px;}
+.rgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.ro .k{font-size:11px;color:var(--mute);letter-spacing:.06em;}
+.ro .v{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums;}
+.ro .v small{font-size:11px;color:var(--mute);font-weight:600;margin-left:2px;}
+.ro .v.hot{color:var(--fail);} .ro .v.ok{color:var(--safe);} .ro .v.mid{color:var(--warn);}
+.fuelrow{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--mute);}
+.fuelbar{flex:1;height:8px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden;}
+.fuelbar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--burn),var(--coin));transition:width .1s linear;}
+.fuelbar.low i{background:var(--fail);}
+.coins{font-family:var(--f-display);color:var(--coin);font-weight:700;font-size:13px;white-space:nowrap;}
+#radarWrap{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;flex:none;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+#radar{width:104px;height:104px;display:block;}
+#radarWrap .cap{font-size:10px;color:var(--mute);text-align:center;margin-top:2px;letter-spacing:.06em;}
+#sndBtn,#camBtn{pointer-events:auto;margin-top:6px;width:100%;font:600 11px var(--f-body);color:var(--mute);background:transparent;
+  border:1px solid var(--line);border-radius:6px;padding:3px 0;cursor:pointer;}
+
+#rating{align-self:flex-start;margin-top:8px;font-family:var(--f-display);font-size:13px;background:var(--panel);
+  border:1px solid var(--line);border-radius:999px;padding:4px 12px;}
+#rating b{font-size:15px;margin-left:4px;}
+
+#banner{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);text-align:center;width:min(90%,520px);
+  font-weight:900;font-size:clamp(18px,4.5vw,28px);text-shadow:0 2px 12px rgba(0,0,0,.7);transition:opacity .3s;}
+#banner.warn{color:var(--warn);} #banner.fail{color:var(--fail);} #banner.good{color:var(--safe);} #banner.coin{color:var(--coin);}
+#banner small{display:block;font-size:.55em;font-weight:500;color:var(--text);margin-top:4px;}
+
+/* touch controls */
+#controls{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;}
+#joy{pointer-events:auto;width:132px;height:132px;border-radius:50%;border:2px solid var(--line);background:rgba(8,18,36,.45);
+  position:relative;touch-action:none;}
+#joy .knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;
+  background:rgba(233,240,250,.85);box-shadow:0 2px 10px rgba(0,0,0,.4);}
+#joy .lbl,#burn .lbl{position:absolute;left:0;right:0;bottom:-20px;text-align:center;font-size:11px;color:var(--mute);}
+#burn{pointer-events:auto;width:118px;height:118px;border-radius:50%;border:3px solid var(--burn);background:rgba(255,122,47,.18);
+  color:var(--text);font:900 22px var(--f-body);position:relative;touch-action:none;cursor:pointer;}
+#burn.on{background:var(--burn);color:var(--ink);box-shadow:0 0 30px rgba(255,122,47,.7);}
+.keyhint{font-size:12px;color:var(--mute);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;}
+.keyhint kbd{font-family:var(--f-display);background:rgba(255,255,255,.1);border-radius:4px;padding:0 5px;color:var(--text);}
+
+/* panels */
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:calc(env(safe-area-inset-top,0px) + 16px) calc(env(safe-area-inset-bottom,0px) + 16px);
+  background:linear-gradient(180deg,rgba(7,16,31,.25),rgba(7,16,31,.7));}
+.card{width:min(100%,460px);max-height:100%;overflow:auto;background:rgba(8,18,36,.88);border:1px solid var(--line);
+  border-radius:14px;padding:22px 20px;display:flex;flex-direction:column;gap:14px;touch-action:pan-y;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);}
+.eyebrow{font-family:var(--f-display);font-size:12px;letter-spacing:.18em;color:var(--burn);}
+h1{margin:0;font-weight:900;font-size:clamp(30px,8vw,40px);line-height:1.1;text-wrap:balance;}
+h1 em{font-style:normal;color:var(--coin);}
+.lead{margin:0;color:var(--mute);font-size:14px;line-height:1.6;}
+.rules{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.5;}
+.rules li{display:grid;grid-template-columns:68px 1fr;gap:10px;align-items:baseline;}
+.rules b{font-family:var(--f-display);font-size:12px;color:var(--ink);background:var(--text);border-radius:4px;text-align:center;padding:2px 0;}
+.rules li.c b{background:var(--coin);} .rules li.f b{background:var(--burn);}
+.scale{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;font-family:var(--f-display);font-size:11px;text-align:center;}
+.scale div{border-radius:4px;padding:5px 2px;background:rgba(255,255,255,.06);}
+.scale div b{display:block;font-size:15px;}
+.scale .g b{color:var(--safe);} .scale .y b{color:var(--warn);} .scale .r b{color:var(--fail);}
+.btn{pointer-events:auto;font:900 18px var(--f-body);color:var(--ink);background:var(--burn);border:0;border-radius:10px;padding:14px;cursor:pointer;}
+.btn:focus-visible,.opt:focus-visible,#sndBtn:focus-visible,#camBtn:focus-visible{outline:3px solid var(--coin);outline-offset:2px;}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line);font-size:15px;padding:10px;}
+.best{font-size:12px;color:var(--mute);text-align:center;font-family:var(--f-display);}
+
+.grade{display:flex;align-items:center;gap:16px;}
+.grade .big{font-family:var(--f-display);font-weight:700;font-size:56px;line-height:1;min-width:110px;text-align:center;
+  border:2px solid currentColor;border-radius:12px;padding:8px 6px;}
+.grade .gt{font-weight:900;font-size:20px;} .grade p{margin:4px 0 0;color:var(--mute);font-size:13px;line-height:1.55;}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px;}
+.stats div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:4px;}
+.stats span{color:var(--mute);} .stats b{font-family:var(--f-display);font-variant-numeric:tabular-nums;}
+.quiz{border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;background:rgba(244,197,66,.06);}
+.quiz .q{font-weight:700;font-size:15px;line-height:1.5;}
+.quiz .qh{font-size:12px;color:var(--coin);font-family:var(--f-display);letter-spacing:.1em;}
+.opt{pointer-events:auto;text-align:left;font:500 14px var(--f-body);color:var(--text);background:rgba(255,255,255,.06);
+  border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;}
+.opt.right{background:rgba(79,214,160,.2);border-color:var(--safe);} .opt.wrong{background:rgba(255,77,94,.2);border-color:var(--fail);}
+.opt:disabled{cursor:default;}
+.explain{font-size:13px;color:var(--mute);line-height:1.55;}
+.total{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--f-display);}
+.total b{font-size:30px;color:var(--coin);font-variant-numeric:tabular-nums;}
+.err{padding:20px;font-size:15px;line-height:1.6;}
+/* 選債 */
+.bonds{display:flex;flex-direction:column;gap:10px;}
+.bond{pointer-events:auto;text-align:left;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:10px;
+  padding:12px 14px;color:var(--text);font:inherit;cursor:pointer;display:flex;flex-direction:column;gap:9px;}
+.bond:hover{border-color:var(--burn);background:rgba(255,122,47,.08);}
+.bond:focus-visible{outline:3px solid var(--coin);outline-offset:2px;}
+.bond .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.bond .nm{font-weight:900;font-size:17px;} .bond .ty{font-size:12px;color:var(--mute);margin-left:6px;font-weight:500;}
+.rt{font-family:var(--f-display);font-weight:700;font-size:13px;padding:2px 8px;border-radius:4px;white-space:nowrap;}
+.rt.ig{background:rgba(79,214,160,.18);color:var(--safe);} .rt.hy{background:rgba(255,77,94,.18);color:var(--fail);}
+.rt.bbb{background:rgba(255,176,46,.18);color:var(--warn);} .rt.na{background:rgba(147,168,198,.18);color:var(--mute);}
+.bond .meta{font-size:12px;color:var(--mute);font-family:var(--f-display);letter-spacing:.02em;}
+.disc{font-size:11px;color:var(--mute);text-align:center;line-height:1.5;}
+.sheet dd.note{font-family:var(--f-body);font-weight:500;font-size:12px;line-height:1.5;}
+/* 排行榜 */
+.lb{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:10px;padding:12px;}
+.lb label{font-size:12px;color:var(--mute);}
+.lbrow{display:flex;gap:8px;}
+.lbrow input{flex:1;min-width:0;font:500 16px var(--f-body);color:var(--text);background:rgba(255,255,255,.07);border:1px solid var(--line);
+  border-radius:8px;padding:10px 12px;-webkit-user-select:text;user-select:text;}
+.lbrow input:focus-visible{outline:3px solid var(--coin);outline-offset:1px;}
+.lbrow .btn{font-size:15px;padding:10px 14px;white-space:nowrap;}
+.btn:disabled{opacity:.45;cursor:default;}
+.lbmsg{font-size:12px;color:var(--mute);line-height:1.5;}
+.lbmsg.ok{color:var(--safe);} .lbmsg.bad{color:var(--fail);}
+.ranks{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;}
+.ranks li{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid var(--line);}
+.ranks li.me{background:rgba(244,197,66,.1);}
+.ranks .rk{font-family:var(--f-display);font-weight:700;font-size:16px;text-align:center;color:var(--mute);}
+.ranks li:nth-child(1) .rk{color:var(--coin);} .ranks li:nth-child(2) .rk{color:#d6dde8;} .ranks li:nth-child(3) .rk{color:#e09a5a;}
+.ranks .pn{font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ranks .pn small{display:block;font-weight:400;font-size:11px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;}
+.ranks b{font-family:var(--f-display);font-size:17px;color:var(--coin);font-variant-numeric:tabular-nums;}
+.ranks .empty{display:block;color:var(--mute);font-size:13px;padding:14px 4px;}
+.terms{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+.terms span{display:block;font-size:11px;color:var(--mute);}
+.terms b{font-family:var(--f-display);font-size:17px;font-variant-numeric:tabular-nums;}
+.fx{margin:0;padding:0;list-style:none;font-size:12px;color:var(--mute);line-height:1.6;display:flex;flex-direction:column;gap:2px;}
+.fx li::before{content:"▸ ";color:var(--burn);}
+.fx li.mult{color:var(--coin);}
+.fx li.mult::before{color:var(--coin);}
+/* 任務條件書 */
+.sheet{border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+.sheet .sh{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:rgba(255,255,255,.07);
+  font-family:var(--f-display);font-size:11px;letter-spacing:.14em;color:var(--mute);}
+.sheet dl{margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);}
+.sheet dt,.sheet dd{padding:6px 12px;border-top:1px solid var(--line);font-size:13px;}
+.sheet dt{color:var(--mute);}
+.sheet dd{margin:0;text-align:right;font-family:var(--f-display);font-weight:600;font-variant-numeric:tabular-nums;}
+.sheet .sec{grid-column:1/-1;padding:7px 12px 5px;border-top:1px solid var(--line);font-size:11px;letter-spacing:.14em;color:var(--burn);
+  font-family:var(--f-display);background:rgba(255,122,47,.06);}
+.sheet dd.gold{color:var(--coin);}
+.card>*{flex-shrink:0;}
+.btnrow{display:flex;gap:8px;} .btnrow .btn{flex:1;}
+@media (prefers-reduced-motion:reduce){ #banner,.fuelbar i{transition:none;} }
+</style>
+
+<canvas id="c" aria-label="火箭降落遊戲畫面"></canvas>
+
+<div id="ui">
+  <div id="hud" hidden>
+    <div class="readouts">
+      <div class="rgrid">
+        <div class="ro"><div class="k">高度</div><div class="v" id="hAlt">0<small>m</small></div></div>
+        <div class="ro"><div class="k">下降速度</div><div class="v" id="hVs">0<small>m/s</small></div></div>
+        <div class="ro"><div class="k">水平速度</div><div class="v" id="hHs">0<small>m/s</small></div></div>
+      </div>
+      <div class="fuelrow"><span>本金</span><div class="fuelbar" id="fuelbar"><i id="fuel"></i></div><span class="coins" id="hCoins">配息 0</span></div>
+    </div>
+    <div id="radarWrap"><canvas id="radar" width="208" height="208"></canvas><div class="cap">回收船雷達</div>
+      <button id="sndBtn" type="button">音效：開</button><button id="camBtn" type="button">視角：電視轉播</button></div>
+  </div>
+  <div id="rating" hidden>此刻落地評等<b id="rNow">—</b></div>
+  <div id="banner"></div>
+  <div id="controls" hidden>
+    <div id="joy"><div class="knob" id="knob"></div><div class="lbl">修正位置</div></div>
+    <div class="keyhint" id="keyhint" hidden><kbd>空白鍵</kbd> 點火　<kbd>W A S D</kbd>／<kbd>方向鍵</kbd> 修正位置　<kbd>C</kbd> 切換視角</div>
+    <button id="burn" type="button">點火<span class="lbl">按住減速</span></button>
+  </div>
+</div>
+
+<div class="screen" id="menu">
+  <div class="card">
+    <div class="eyebrow">BOOSTER RECOVERY · 固收版</div>
+    <h1>回收吧！<em>債券火箭</em></h1>
+    <p class="lead">一級火箭從 650 公尺高空落下，你要把它穩穩降在海上回收船。燃料就是你的本金，落地速度決定這趟任務的信用評等。</p>
+    <ul class="rules">
+      <li class="c"><b>選債</b><span>出發前挑一檔債券，它的條件會變成火箭的性能。</span></li>
+      <li class="f"><b>點火</b><span>按住減速，但會消耗本金。太早點火本金燒光，太晚點火直接撞船。</span></li>
+      <li><b>修正</b><span>搖桿或方向鍵把火箭移到回收船上方，看地面的落點圈：綠色才在船上。</span></li>
+      <li class="c"><b>配息</b><span>沿路吃金幣補回本金，票面利率越高補越多。</span></li>
+      <li><b>風暴</b><span>升息風暴會把火箭往旁邊推，剩餘年期越長推越用力。</span></li>
+    </ul>
+    <div class="scale" aria-label="落地速度與評等對照">
+      <div class="g"><b>AAA</b>≤2.5</div><div class="g"><b>A</b>≤4</div><div class="y"><b>BBB</b>≤6</div><div class="r"><b>BB</b>≤9</div><div class="r"><b>D</b>&gt;9</div>
+    </div>
+    <p class="lead" style="font-size:12px;margin-top:-6px">上排為任務評等，下排為落地下降速度（m/s），這是一般標準；評等越好越寬鬆，評等較低或次順位會變嚴。水平速度太大也會被降評。成功落地後還有一題債券題可以加碼。</p>
+    <button class="btn" id="startBtn" type="button">選債券出發</button>
+    <button class="btn ghost" id="boardBtn" type="button" hidden>看排行榜</button>
+    <div class="best" id="bestTxt"></div>
+  </div>
+</div>
+
+<div class="screen" id="pick" hidden>
+  <div class="card">
+    <div class="eyebrow">STEP 1 · 選一檔債券當火箭</div>
+    <h1 style="font-size:clamp(24px,6vw,30px)">這趟要飛哪一檔？</h1>
+    <p class="lead">本期熱銷券。殖利率越高，分數加權越多，但風險也跟著來：評等和債券順位影響落地標準，剩餘年期影響風暴推力，票面利率影響配息補回多少本金。</p>
+    <div class="bonds" id="bonds"></div>
+    <div class="disc" id="pickDisc"></div>
+    <button class="btn ghost" id="backBtn" type="button">回到說明</button>
+  </div>
+</div>
+
+<div class="screen" id="result" hidden>
+  <div class="card">
+    <div class="eyebrow">任務報告</div>
+    <div class="grade"><div class="big" id="gBig">AAA</div><div><div class="gt" id="gTitle"></div><p id="gText"></p></div></div>
+    <div class="sheet"><div class="sh"><span>任務條件書 TERM SHEET</span><span id="shNo"></span></div><dl id="sheet"></dl></div>
+    <div class="quiz" id="quiz">
+      <div class="qh">加碼題 · 答對 +500</div>
+      <div class="q" id="qText"></div>
+      <div id="qOpts" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="explain" id="qExp" hidden></div>
+    </div>
+    <div class="lb" id="lbForm" hidden>
+      <label for="pname">上榜名稱（最多 12 字）</label>
+      <div class="lbrow"><input id="pname" maxlength="12" autocomplete="off" placeholder="例如：西湖-阿明"><button class="btn" id="submitBtn" type="button" disabled>登上排行榜</button></div>
+      <div class="lbmsg" id="lbMsg">先答完加碼題，分數確定後就能上榜。</div>
+    </div>
+    <div class="total"><span>本次總分</span><b id="total">0</b></div>
+    <div class="best" id="bestTxt2"></div>
+    <div class="btnrow"><button class="btn" id="sameBtn" type="button">同一檔再飛</button><button class="btn ghost" id="againBtn" type="button">換一檔債券</button></div>
+  </div>
+</div>
+
+<div class="screen" id="board" hidden>
+  <div class="card">
+    <div class="eyebrow">LEADERBOARD · 排行榜</div>
+    <h1 style="font-size:clamp(24px,6vw,30px)">回收吧！排行榜</h1>
+    <p class="lead" id="boardSub">每人只列最高分，前 20 名。</p>
+    <ol class="ranks" id="ranks"><li><span class="empty">讀取中…</span></li></ol>
+    <div class="btnrow"><button class="btn" id="boardPlay" type="button">去飛一趟</button><button class="btn ghost" id="boardClose" type="button">關閉</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+if(!window.THREE){ document.body.innerHTML='<div class="err">3D 引擎載入失敗，請重新整理頁面再試一次。</div>'; return; }
+
+/* ---------- 基本設定 ---------- */
+const G=3.2, THRUST=9.6, RCS=3.2, BURN=8, START_ALT=650;
+const DECK={hx:25,hz:17,top:3.2};
+const isTouch=matchMedia('(pointer: coarse)').matches;
+let best=0; try{best=+localStorage.getItem('bondRocketBest')||0;}catch(e){}
+const showBest=()=>{const t=best?`最佳紀錄 ${best.toLocaleString()} 分`:''; $('#bestTxt').textContent=t; $('#bestTxt2').textContent=t;};
+showBest();
+
+let renderer;
+try{ renderer=new THREE.WebGLRenderer({canvas:$('#c'),antialias:true}); }
+catch(e){ document.body.innerHTML='<div class="err">這台裝置的瀏覽器不支援 WebGL，換 Chrome 或 Safari 試試看。</div>'; return; }
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(60,1,0.5,7000);
+scene.fog=new THREE.Fog(0x9a6a5a,260,2000);
+
+/* ---------- 天空（黃昏漸層） ---------- */
+const sky=new THREE.Mesh(new THREE.SphereGeometry(3000,32,16),new THREE.ShaderMaterial({
+  side:THREE.BackSide,depthWrite:false,fog:false,
+  uniforms:{sun:{value:new THREE.Vector3(-0.75,0.12,-0.65).normalize()}},
+  vertexShader:`varying vec3 vD; void main(){ vD=normalize(position); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+  fragmentShader:`varying vec3 vD; uniform vec3 sun;
+    void main(){ float h=vD.y;
+      vec3 top=vec3(0.03,0.07,0.18), mid=vec3(0.17,0.25,0.45), hor=vec3(0.95,0.55,0.34), low=vec3(0.06,0.12,0.2);
+      vec3 c = h>0.0 ? mix(hor, mix(mid,top,smoothstep(0.15,0.7,h)), smoothstep(0.0,0.18,h)) : mix(hor,low,smoothstep(0.0,0.08,-h));
+      float s=max(dot(vD,sun),0.0); c+=vec3(1.0,0.6,0.3)*pow(s,40.0)*0.9 + vec3(1.0,0.5,0.25)*pow(s,6.0)*0.25;
+      gl_FragColor=vec4(c,1.0);} `
+}));
+scene.add(sky);
+
+scene.add(new THREE.HemisphereLight(0x8fb0e0,0x1a2433,0.75));
+const sunL=new THREE.DirectionalLight(0xffc49a,1.1); sunL.position.set(-600,250,-300); scene.add(sunL);
+const fillL=new THREE.DirectionalLight(0x9fb8ff,0.35); fillL.position.set(300,200,400); scene.add(fillL);
+
+/* ---------- 海面 ---------- */
+const SEG=96, oceanGeo=new THREE.PlaneGeometry(4000,4000,SEG,SEG); oceanGeo.rotateX(-Math.PI/2);
+const oPos=oceanGeo.attributes.position, oBase=new Float32Array(oPos.count*2);
+for(let i=0;i<oPos.count;i++){oBase[i*2]=oPos.getX(i);oBase[i*2+1]=oPos.getZ(i);}
+const ocean=new THREE.Mesh(oceanGeo,new THREE.MeshStandardMaterial({color:0x123a5c,roughness:0.28,metalness:0.25}));
+scene.add(ocean);
+const waveH=(x,z,t)=>0.9*Math.sin(x*0.018+t*0.9)+0.7*Math.sin(z*0.022-t*1.1)+0.35*Math.sin((x+z)*0.05+t*1.7);
+function updateOcean(t){ for(let i=0;i<oPos.count;i++){oPos.setY(i,waveH(oBase[i*2],oBase[i*2+1],t));} oPos.needsUpdate=true; oceanGeo.computeVertexNormals(); }
+
+/* ---------- 小工具：畫布貼圖 ---------- */
+function canvasTex(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t;}
+
+/* ---------- 回收船 ---------- */
+const ship=new THREE.Group(); scene.add(ship);
+const hull=new THREE.Mesh(new THREE.BoxGeometry(54,5.5,38),new THREE.MeshStandardMaterial({color:0x2a3240,roughness:0.8}));
+hull.position.y=0.45; ship.add(hull);
+const deckTex=canvasTex(1024,700,(g,w,h)=>{
+  g.fillStyle='#4a525e';g.fillRect(0,0,w,h);
+  g.strokeStyle='rgba(0,0,0,.25)';g.lineWidth=2;for(let x=0;x<w;x+=64){g.beginPath();g.moveTo(x,0);g.lineTo(x,h);g.stroke();}
+  for(let y=0;y<h;y+=64){g.beginPath();g.moveTo(0,y);g.lineTo(w,y);g.stroke();}
+  for(let i=0;i<w;i+=40){g.fillStyle=(i/40)%2?'#f2c230':'#1a1a1a';g.fillRect(i,0,40,18);g.fillRect(i,h-18,40,18);}
+  const cx=w/2,cy=h/2;
+  g.strokeStyle='#f2c230';g.lineWidth=26;g.beginPath();g.arc(cx,cy,260,0,Math.PI*2);g.stroke();
+  g.strokeStyle='#ffffff';g.lineWidth=10;g.beginPath();g.arc(cx,cy,150,0,Math.PI*2);g.stroke();
+  g.fillStyle='rgba(242,194,48,.9)';g.font='900 150px "Noto Sans TC",sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('債',cx,cy+6);
+  g.fillStyle='rgba(255,255,255,.7)';g.font='700 40px "Chakra Petch",sans-serif';g.fillText('BOND RECOVERY',cx,cy+215);
+});
+const deck=new THREE.Mesh(new THREE.PlaneGeometry(DECK.hx*2+2,DECK.hz*2+2),new THREE.MeshStandardMaterial({map:deckTex,roughness:0.9}));
+deck.rotation.x=-Math.PI/2; deck.position.y=DECK.top+0.02; ship.add(deck);
+const wallMat=new THREE.MeshStandardMaterial({color:0x6b7380,roughness:0.7});
+[[-1],[1]].forEach(([s])=>{const w=new THREE.Mesh(new THREE.BoxGeometry(3,4,36),wallMat);w.position.set(s*28.5,4.2,0);ship.add(w);});
+const box1=new THREE.Mesh(new THREE.BoxGeometry(8,6,6),wallMat);box1.position.set(-18,6,-21);ship.add(box1);
+const box2=box1.clone();box2.position.x=18;ship.add(box2);
+const beacons=[];
+[[-26,-18,0xff3344],[26,-18,0x33ff88],[-26,18,0xff3344],[26,18,0x33ff88]].forEach(([x,z,c])=>{
+  const b=new THREE.Mesh(new THREE.SphereGeometry(0.9,10,8),new THREE.MeshBasicMaterial({color:c}));b.position.set(x,7,z);ship.add(b);beacons.push(b);});
+// 降落光柱：從高空就能看到船在哪
+const beam=new THREE.Mesh(new THREE.CylinderGeometry(9,9,420,24,1,true),new THREE.MeshBasicMaterial({color:0x6fe0ff,transparent:true,opacity:0.06,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false}));
+beam.position.y=214; ship.add(beam);
+
+/* ---------- 火箭 ---------- */
+const rocket=new THREE.Group(); scene.add(rocket);
+const inner=new THREE.Group(); inner.position.y=20; rocket.add(inner);
+const sootTex=canvasTex(128,1024,(g,w,h)=>{
+  g.fillStyle='#eef1f5';g.fillRect(0,0,w,h);
+  const gr=g.createLinearGradient(0,h*0.45,0,h);gr.addColorStop(0,'rgba(40,36,34,0)');gr.addColorStop(1,'rgba(40,36,34,.85)');
+  g.fillStyle=gr;g.fillRect(0,0,w,h);
+  for(let i=0;i<40;i++){g.fillStyle=`rgba(30,28,26,${Math.random()*0.35})`;const x=Math.random()*w;g.fillRect(x,h*(0.3+Math.random()*0.4),2+Math.random()*5,h);}
+});
+const M={body:new THREE.MeshStandardMaterial({map:sootTex,roughness:0.55}),dark:new THREE.MeshStandardMaterial({color:0x1b1d22,roughness:0.6}),
+  metal:new THREE.MeshStandardMaterial({color:0x5c6370,roughness:0.4,metalness:0.7})};
+const add=(geo,mat,y,p=inner)=>{const m=new THREE.Mesh(geo,mat);m.position.y=y-20;p.add(m);return m;};
+add(new THREE.CylinderGeometry(1.85,1.85,36,24),M.body,19.6);
+add(new THREE.CylinderGeometry(1.88,1.88,4.8,24),M.dark,40);
+add(new THREE.CylinderGeometry(1.4,1.88,0.6,24),M.dark,42.7);
+add(new THREE.CylinderGeometry(1.9,1.9,1.2,24),M.dark,1.2);
+for(let i=0;i<9;i++){const a=i/8*Math.PI*2,r=i===8?0:1.15;const b=add(new THREE.CylinderGeometry(0.28,0.5,1.0,10,1,true),M.metal,0.3);b.position.x=i===8?0:Math.cos(a)*r;b.position.z=i===8?0:Math.sin(a)*r;}
+for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4;const f=add(new THREE.BoxGeometry(0.15,2.0,2.4),M.metal,39);f.position.x=Math.cos(a)*2.9;f.position.z=Math.sin(a)*2.9;f.rotation.y=-a;}
+const legs=[]; const LEG_L=10.57, LEG_D=0.553, LEG_F=Math.PI-0.06;
+for(let i=0;i<4;i++){const a=i*Math.PI/2+Math.PI/4;const pv=new THREE.Group();pv.position.set(Math.cos(a)*1.95,9-20,Math.sin(a)*1.95);pv.rotation.y=-a;inner.add(pv);
+  const piv=new THREE.Group();pv.add(piv);
+  const l=new THREE.Mesh(new THREE.BoxGeometry(0.5,LEG_L,0.9),M.dark);l.position.y=-LEG_L/2;piv.add(l);
+  const foot=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.7,0.3,12),M.metal);foot.position.y=-LEG_L;piv.add(foot);
+  piv.rotation.z=LEG_F;legs.push(piv);}
+// 火焰
+const flameGeo=new THREE.ConeGeometry(1.5,1,18,1,true);flameGeo.rotateX(Math.PI);flameGeo.translate(0,-0.5,0);
+const flame=new THREE.Mesh(flameGeo,new THREE.MeshBasicMaterial({color:0xff8a3a,transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false}));
+flame.position.y=-0.2-20+0.2; inner.add(flame);
+const core=new THREE.Mesh(flameGeo,new THREE.MeshBasicMaterial({color:0xfff1c0,transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+core.scale.set(0.5,1,0.5);core.position.copy(flame.position);inner.add(core);
+const fireLight=new THREE.PointLight(0xff8a3a,0,110,1.6);fireLight.position.y=-6;rocket.add(fireLight);
+
+// 落點圈
+const marker=new THREE.Mesh(new THREE.RingGeometry(6.5,8,40),new THREE.MeshBasicMaterial({color:0x4fd6a0,transparent:true,opacity:0.8,depthWrite:false,side:THREE.DoubleSide}));
+marker.rotation.x=-Math.PI/2;scene.add(marker);
+
+/* ---------- 配息金幣 ---------- */
+const coinFace=canvasTex(256,256,(g,w,h)=>{const gr=g.createRadialGradient(128,110,20,128,128,128);gr.addColorStop(0,'#ffe58a');gr.addColorStop(1,'#c9921a');
+  g.fillStyle=gr;g.beginPath();g.arc(128,128,126,0,Math.PI*2);g.fill();g.strokeStyle='#8a5e08';g.lineWidth=10;g.beginPath();g.arc(128,128,108,0,Math.PI*2);g.stroke();
+  g.fillStyle='#6b4300';g.font='900 120px "Noto Sans TC",sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('息',128,136);});
+const coinMats=[new THREE.MeshStandardMaterial({color:0xd9a521,metalness:0.8,roughness:0.3,emissive:0x5a3c00}),
+  new THREE.MeshStandardMaterial({map:coinFace,metalness:0.5,roughness:0.35,emissive:0x3a2600}),
+  new THREE.MeshStandardMaterial({map:coinFace,metalness:0.5,roughness:0.35,emissive:0x3a2600})];
+const coinGeo=new THREE.CylinderGeometry(3.2,3.2,0.6,28);coinGeo.rotateX(Math.PI/2);
+const glowTex=canvasTex(128,128,(g)=>{const gr=g.createRadialGradient(64,64,0,64,64,64);gr.addColorStop(0,'rgba(255,220,120,.9)');gr.addColorStop(1,'rgba(255,200,80,0)');g.fillStyle=gr;g.fillRect(0,0,128,128);});
+let coins=[];
+function buildCoins(sx,sz){
+  coins.forEach(c=>scene.remove(c.obj));coins=[];
+  const n=12;
+  for(let i=1;i<=n;i++){const t=i/(n+1);
+    const y=START_ALT-60-(START_ALT-140)*t;
+    const x=sx*(1-t*1.05)+(Math.random()*2-1)*14, z=sz*(1-t*1.05)+(Math.random()*2-1)*14;
+    const g=new THREE.Group();g.position.set(x,y,z);
+    g.add(new THREE.Mesh(coinGeo,coinMats));
+    const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.scale.set(14,14,1);g.add(sp);
+    scene.add(g);coins.push({obj:g,taken:false,phase:Math.random()*6});}
+}
+
+/* ---------- 粒子 ---------- */
+function makeParticles(n,additive){
+  const geo=new THREE.BufferGeometry();
+  const pos=new Float32Array(n*3),col=new Float32Array(n*3),size=new Float32Array(n),alpha=new Float32Array(n);
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));geo.setAttribute('aColor',new THREE.BufferAttribute(col,3));
+  geo.setAttribute('aSize',new THREE.BufferAttribute(size,1));geo.setAttribute('aAlpha',new THREE.BufferAttribute(alpha,1));
+  const mat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending,
+    uniforms:{uScale:{value:500}},
+    vertexShader:`attribute float aSize;attribute float aAlpha;attribute vec3 aColor;varying float vA;varying vec3 vC;uniform float uScale;
+      void main(){vA=aAlpha;vC=aColor;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_PointSize=aSize*uScale/max(1.0,-mv.z);gl_Position=projectionMatrix*mv;}`,
+    fragmentShader:`varying float vA;varying vec3 vC;void main(){vec2 d=gl_PointCoord-0.5;float r=length(d);if(r>0.5)discard;gl_FragColor=vec4(vC,smoothstep(0.5,0.05,r)*vA);}`});
+  const pts=new THREE.Points(geo,mat);pts.frustumCulled=false;scene.add(pts);
+  const P={n,pos,col,size,alpha,mat,geo,i:0,life:new Float32Array(n),max:new Float32Array(n),vel:new Float32Array(n*3),grow:new Float32Array(n),a0:new Float32Array(n),drag:new Float32Array(n)};
+  P.emit=(x,y,z,vx,vy,vz,life,s,r,g,b,a,grow,drag)=>{const i=P.i;P.i=(i+1)%n;
+    pos[i*3]=x;pos[i*3+1]=y;pos[i*3+2]=z;P.vel[i*3]=vx;P.vel[i*3+1]=vy;P.vel[i*3+2]=vz;
+    P.life[i]=P.max[i]=life;size[i]=s;col[i*3]=r;col[i*3+1]=g;col[i*3+2]=b;P.a0[i]=a;P.grow[i]=grow;P.drag[i]=drag;};
+  P.clear=()=>{P.life.fill(0);alpha.fill(0);geo.attributes.aAlpha.needsUpdate=true;};
+  P.update=(dt,groundFn)=>{for(let i=0;i<n;i++){
+      if(P.life[i]<=0){alpha[i]=0;continue;}
+      P.life[i]-=dt;const k=Math.max(0,1-P.drag[i]*dt);
+      P.vel[i*3]*=k;P.vel[i*3+1]*=k;P.vel[i*3+2]*=k;
+      pos[i*3]+=P.vel[i*3]*dt;pos[i*3+1]+=P.vel[i*3+1]*dt;pos[i*3+2]+=P.vel[i*3+2]*dt;
+      if(groundFn){const gy=groundFn(pos[i*3],pos[i*3+2]);if(pos[i*3+1]<gy){pos[i*3+1]=gy;const sp=Math.abs(P.vel[i*3+1])*0.7;
+        let dx=pos[i*3]-rocket.position.x,dz=pos[i*3+2]-rocket.position.z;const L=Math.hypot(dx,dz)||1;
+        P.vel[i*3]+=dx/L*sp+(Math.random()-0.5)*sp;P.vel[i*3+2]+=dz/L*sp+(Math.random()-0.5)*sp;P.vel[i*3+1]=0.5;}}
+      size[i]+=P.grow[i]*dt;alpha[i]=P.a0[i]*Math.max(0,P.life[i]/P.max[i]);}
+    geo.attributes.position.needsUpdate=true;geo.attributes.aAlpha.needsUpdate=true;geo.attributes.aSize.needsUpdate=true;geo.attributes.aColor.needsUpdate=true;};
+  return P;
+}
+const smoke=makeParticles(900,false), fire=makeParticles(500,true);
+
+/* ---------- 音效 ---------- */
+let AC=null,engGain=null,soundOn=true;
+function initAudio(){ if(AC) return; try{
+  AC=new (window.AudioContext||window.webkitAudioContext)();
+  const len=AC.sampleRate*2,buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0);let last=0;
+  for(let i=0;i<len;i++){const w=Math.random()*2-1;last=(last+0.02*w)/1.02;d[i]=last*3.5;}
+  const src=AC.createBufferSource();src.buffer=buf;src.loop=true;
+  const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=380;
+  engGain=AC.createGain();engGain.gain.value=0;src.connect(lp).connect(engGain).connect(AC.destination);src.start();
+}catch(e){AC=null;} }
+function ping(f1,f2,dur,vol){ if(!AC||!soundOn) return; const o=AC.createOscillator(),g=AC.createGain();o.type='triangle';
+  o.frequency.setValueAtTime(f1,AC.currentTime);o.frequency.exponentialRampToValueAtTime(f2,AC.currentTime+dur);
+  g.gain.setValueAtTime(vol,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+dur);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+dur);}
+function boom(){ if(!AC||!soundOn) return; const len=AC.sampleRate*1.4,buf=AC.createBuffer(1,len,AC.sampleRate),d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.5);
+  const s=AC.createBufferSource();s.buffer=buf;const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=600;const g=AC.createGain();g.gain.value=0.9;
+  s.connect(lp).connect(g).connect(AC.destination);s.start();}
+$('#sndBtn').addEventListener('click',()=>{soundOn=!soundOn;$('#sndBtn').textContent='音效：'+(soundOn?'開':'關');if(!soundOn&&engGain)engGain.gain.value=0;});
+
+/* ---------- 輸入 ---------- */
+const keys={};
+addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)&&state==='flying')e.preventDefault();});
+addEventListener('keyup',e=>{keys[e.code]=false;});
+const joy={x:0,y:0,id:null};
+const joyEl=$('#joy'),knob=$('#knob');
+joyEl.addEventListener('pointerdown',e=>{joy.id=e.pointerId;joyEl.setPointerCapture(e.pointerId);moveJoy(e);});
+joyEl.addEventListener('pointermove',e=>{if(e.pointerId===joy.id)moveJoy(e);});
+const endJoy=e=>{if(e.pointerId!==joy.id)return;joy.id=null;joy.x=joy.y=0;knob.style.transform='';};
+joyEl.addEventListener('pointerup',endJoy);joyEl.addEventListener('pointercancel',endJoy);
+function moveJoy(e){const r=joyEl.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+  const m=46,L=Math.hypot(dx,dy);if(L>m){dx*=m/L;dy*=m/L;}joy.x=dx/m;joy.y=dy/m;knob.style.transform=`translate(${dx}px,${dy}px)`;}
+let burnTouch=false;const burnEl=$('#burn');
+burnEl.addEventListener('pointerdown',e=>{burnTouch=true;burnEl.setPointerCapture(e.pointerId);});
+['pointerup','pointercancel','lostpointercapture'].forEach(ev=>burnEl.addEventListener(ev,()=>{burnTouch=false;}));
+if(!isTouch){joyEl.hidden=true;burnEl.hidden=true;$('#keyhint').hidden=false;}
+
+/* ---------- 遊戲狀態 ---------- */
+const S={pos:new THREE.Vector3(),vel:new THREE.Vector3(),fuel:100,throttle:0,coins:0,legs:0,legsOut:false,wind:new THREE.Vector3(),windT:0,windAlts:[],hinted:false,tilt:{x:0,z:0}};
+let state='menu', resultTimer=0, landing=null, shipBob=0, simT=0;
+let bannerT=0;
+function banner(html,kind,dur){const b=$('#banner');b.className=kind||'';b.innerHTML=html;b.style.opacity=1;bannerT=dur||2;}
+
+function groundAt(x,z){ // 回傳地面高度與是否在船上
+  const lx=x-ship.position.x, lz=z-ship.position.z;
+  const onDeck=Math.abs(lx)<=DECK.hx&&Math.abs(lz)<=DECK.hz;
+  return onDeck?{y:DECK.top+ship.position.y,deck:true}:{y:waveH(x,z,simT),deck:false};
+}
+/* ---------- 債券（條件 → 火箭性能） ---------- */
+/* ====== 債券資料：換券只要改這一段 ====== */
+const PRICE_DATE='2026/10/30';
+const BONDS=[
+ {code:'WMBB26040007',name:'Alphabet 公司債7',ytm:6.35,ytc:6.35,offer:91.32,cpn:5.75,freq:'每半年',mat:'2066/2/15',yrs:39.30,rating:'AA+',rank:'優先無擔保',risk:'P4',min:'USD 2,000',call:'Make Whole Call；2065/08/15（含）起，發行機構有權依 100% 提前買回全部或部份債券'},
+ {code:'WMBB24030004',name:'沙烏地阿拉伯債7',ytm:6.27,ytc:null,offer:93.22,cpn:5.75,freq:'每半年',mat:'2054/1/16',yrs:27.21,rating:'NA',rank:'優先無擔保',risk:'P1',min:'USD 200,000',call:'—'},
+ {code:'WMBB26100005',name:'Alphabet公司債15',ytm:6.00,ytc:5.99,offer:102.90,cpn:6.25,freq:'每半年',mat:'2046/8/15',yrs:19.79,rating:'AA+',rank:'優先無擔保',risk:'P2',min:'USD 2,000',call:'Make Whole Call；2046/02/15（含）起，發行機構有權依 100% 提前買回全部或部份債券'},
+ {code:'WMBB26070003',name:'輝達公司債11',ytm:5.45,ytc:5.46,offer:96.32,cpn:4.95,freq:'每半年',mat:'2036/6/15',yrs:9.63,rating:'AA',rank:'優先無擔保',risk:'P1',min:'USD 2,000',call:'Make Whole Call'},
+ {code:'WMBB25120011',name:'富邦人壽(新加坡)1',ytm:5.97,ytc:5.98,offer:96.37,cpn:5.45,freq:'每半年',mat:'2035/12/10',yrs:9.11,rating:'BBB+',rank:'次順位',risk:'P3',min:'USD 200,000',call:'2035/09/10（含）起，發行機構有權依 100% 提前買回全部或部份債券；限專業投資人'}
+];
+/* ====== 以下自動換算成火箭性能 ====== */
+const TOL_BY_RATING={'AAA':1.25,'AA+':1.2,'AA':1.15,'AA-':1.15,'AA−':1.15,'A+':1.1,'A':1.1,'A-':1.05,'A−':1.05,'BBB+':1.0,'BBB':0.95,'BBB-':0.9,'BBB−':0.9,'NA':1.0};
+const BASE_YTM=Math.min(...BONDS.map(b=>b.ytm));
+BONDS.forEach(b=>{
+  b.wind=Math.round((0.5+b.yrs/40*1.6)*100)/100;           // 剩餘年期越長，升息風暴越大力
+  b.storms=b.yrs>25?3:2;
+  b.coinPct=Math.round(b.cpn*2.4);                         // 票面利率越高，配息補越多本金
+  b.tol=(TOL_BY_RATING[b.rating]??0.85)-(b.rank.includes('次順位')?0.1:0); // 評等越好越寬鬆；次順位再嚴一點
+  b.mult=Math.round(b.ytm/BASE_YTM*100)/100;               // 殖利率越高，分數加權越多
+  b.cpnTxt=(Math.round(b.cpn*1000)%10?b.cpn.toFixed(3):b.cpn.toFixed(2));
+  b.yTxt=b.ytc!=null?b.ytm.toFixed(2)+'/'+b.ytc.toFixed(2):b.ytm.toFixed(2);
+  b.rtCls=b.rating==='NA'?'na':/^A/.test(b.rating)?'ig':/^BBB/.test(b.rating)?'bbb':'hy';
+  b.ig=b.rtCls!=='hy';
+});
+let B=BONDS[0];
+function bondFx(b){return[
+  `配息金幣每顆補 ${b.coinPct}% 本金（票面 ${b.cpnTxt}%）`,
+  `升息風暴推力${b.wind>=1.5?'很大':b.wind>=1?'中等':'小'}（剩餘 ${b.yrs} 年${b.storms>2?'，風暴 3 次':''}）`,
+  `落地標準${b.tol>=1.15?'寬鬆':b.tol>=1?'一般':'較嚴格'}（${b.rating==='NA'?'無 S&P 評等':'S&P '+b.rating}${b.rank.includes('次順位')?'、次順位':''}）`];}
+function renderBonds(){const box=$('#bonds');box.innerHTML='';
+  BONDS.forEach((b,i)=>{const el=document.createElement('button');el.type='button';el.className='bond';el.id='bond'+i;
+    el.innerHTML=`<div class="top"><div><span class="nm">${b.name}</span></div><span class="rt ${b.rtCls}">${b.rating==='NA'?'無評等':b.rating}</span></div>
+      <div class="meta">${b.code} · ${b.rank} · ${b.risk} · Offer ${b.offer.toFixed(2)}</div>
+      <div class="terms"><div><span>YTM/YTC (%)</span><b>${b.yTxt}</b></div><div><span>票面利率</span><b>${b.cpnTxt}%</b></div><div><span>剩餘年期</span><b>${b.yrs} 年</b></div></div>
+      <ul class="fx">${bondFx(b).map(t=>`<li>${t}</li>`).join('')}<li class="mult">分數加權 ×${b.mult.toFixed(2)}（殖利率越高加越多）</li></ul>`;
+    el.onclick=()=>{B=b;start();};box.appendChild(el);});}
+renderBonds();
+$('#pickDisc').textContent='價格日期 '+PRICE_DATE+'，僅供內部教育訓練使用，請勿外流，非投資建議。';
+function showPick(){$('#menu').hidden=true;$('#result').hidden=true;$('#pick').hidden=false;$('#hud').hidden=true;$('#controls').hidden=true;$('#rating').hidden=true;state='menu';}
+
+function rateOf(vs,hs){ vs/=B.tol; hs/=B.tol; if(vs<=2.5&&hs<=2)return'AAA'; if(vs<=4&&hs<=3)return'A'; if(vs<=6&&hs<=4.5)return'BBB'; if(vs<=9)return'BB'; return'D'; }
+const RATE_CLR={AAA:'var(--safe)',A:'var(--safe)',BBB:'var(--warn)',BB:'var(--fail)',D:'var(--fail)',SEA:'var(--fail)'};
+
+function reset(){
+  const sx=(Math.random()*2-1)*70, sz=60+Math.random()*50;
+  S.pos.set(sx,START_ALT,sz);S.vel.set((Math.random()*2-1)*3,-35,(Math.random()*2-1)*3);
+  S.fuel=100;S.throttle=0;S.coins=0;S.legs=0;S.legsOut=false;S.wind.set(0,0,0);S.windT=0;S.hinted=false;S.tilt.x=S.tilt.z=0;S._noFuel=false;S.t=0;S.refill=0;
+  S.windAlts=B.storms>2?[500+Math.random()*60,340+Math.random()*60,180+Math.random()*60]:[420+Math.random()*100,200+Math.random()*110];
+  rocket.visible=true;inner.rotation.set(0,0,0);legs.forEach(l=>l.rotation.z=LEG_F);
+  smoke.clear();fire.clear();buildCoins(sx,sz);landing=null;shipDir=null;
+  camera.position.set(sx+30,START_ALT+28,sz+96);look.set(sx,START_ALT+16,sz);
+}
+
+function land(){
+  const g=groundAt(S.pos.x,S.pos.z);
+  const vs=Math.abs(S.vel.y), hs=Math.hypot(S.vel.x,S.vel.z), dist=Math.hypot(S.pos.x-ship.position.x,S.pos.z-ship.position.z);
+  let rate=g.deck?rateOf(vs,hs):'SEA';
+  if(g.deck&&!S.legsOut&&rate!=='D') rate='D'; // 腳沒放下
+  landing={rate,vs,hs,dist,fuel:S.fuel,coins:S.coins,t:S.t,refill:S.refill};
+  S.pos.y=g.y;S.vel.set(0,0,0);S.throttle=0;
+  if(rate==='D'||rate==='SEA'){
+    if(rate==='D'){for(let i=0;i<220;i++){const a=Math.random()*6.28,u=Math.random()*2-1,s=8+Math.random()*26,r=Math.sqrt(1-u*u);
+        fire.emit(S.pos.x,S.pos.y+8+Math.random()*20,S.pos.z,Math.cos(a)*r*s,Math.abs(u)*s*0.8,Math.sin(a)*r*s,0.8+Math.random()*0.8,4+Math.random()*7,1,0.55+Math.random()*0.3,0.2,1,3,1.5);}
+      for(let i=0;i<120;i++){const a=Math.random()*6.28,s=3+Math.random()*10;smoke.emit(S.pos.x,S.pos.y+5+Math.random()*25,S.pos.z,Math.cos(a)*s,4+Math.random()*6,Math.sin(a)*s,3+Math.random()*2,6,0.18,0.16,0.15,0.85,6,0.6);}
+      rocket.visible=false;boom();banner('爆炸！違約了','fail',2.5);
+    }else{
+      for(let i=0;i<160;i++){const a=Math.random()*6.28,s=2+Math.random()*9;smoke.emit(S.pos.x,S.pos.y,S.pos.z,Math.cos(a)*s,8+Math.random()*16,Math.sin(a)*s,1.5+Math.random(),3,0.9,0.95,1,0.8,4,1.2);}
+      rocket.visible=false;boom();banner('落海了，本金泡湯','fail',2.5);
+    }
+  }else if(rate==='BB'){ inner.rotation.z=0.16;inner.rotation.x=0.05;legs[0].rotation.z=1.1;banner('撐住了，但斷了一支腳','warn',2.5);ping(300,200,0.4,0.25);}
+  else{ inner.rotation.set(0,0,0);banner(rate==='AAA'?'完美軟著陸！':'成功回收！','good',2.5);ping(660,990,0.25,0.25);setTimeout(()=>ping(990,1480,0.3,0.22),180);}
+  state='landed';resultTimer=1.8;
+}
+
+/* ---------- 題庫 ---------- */
+const QUIZ=[
+ {q:'市場殖利率上升時，已發行的固定利率債券價格通常會？',o:['上漲','下跌','不受影響'],a:1,e:'債券價格與殖利率呈反向關係，殖利率上升、價格下跌。'},
+ {q:'以 S&P 評等來看，「投資等級」的最低一階是？',o:['BBB−','BB+','A−'],a:0,e:'BBB− 以上為投資等級，BB+ 以下屬非投資等級（高收益債）。'},
+ {q:'兩檔債券其他條件相同，存續期間較長的那檔，遇到利率變動時價格波動會？',o:['較小','一樣','較大'],a:2,e:'存續期間越長，對利率越敏感，價格波動越大。'},
+ {q:'可贖回債（Callable）的「提前贖回權」掌握在誰手上？',o:['投資人','發行機構','受託銀行'],a:1,e:'贖回權屬於發行機構，通常在利率下降時較可能被執行。'},
+ {q:'面額 10,000 美元、票面利率 5% 的債券，每年配息合計是？',o:['500 美元','50 美元','5,000 美元'],a:0,e:'年配息＝面額 × 票面利率＝10,000 × 5%＝500 美元。'},
+ {q:'「殖利率曲線倒掛」指的是什麼情況？',o:['長率高於短率','短率高於長率','長短率完全相同'],a:1,e:'正常情況長率高於短率；短率反超長率稱為倒掛。'},
+ {q:'信用利差明顯擴大，通常代表市場認為發行人的信用風險？',o:['下降','上升','沒有變化'],a:1,e:'投資人要求更高的風險補償，利差就會擴大。'},
+ {q:'發行人清算時，主順位債與次順位債誰先受償？',o:['次順位債','主順位債','兩者同時'],a:1,e:'主順位債的清償順序在次順位債之前。'},
+ {q:'買入價格低於面額的債券，稱為？',o:['溢價債','平價債','折價債'],a:2,e:'價格低於面額為折價，高於面額為溢價。'},
+ {q:'半年配息的債券，一年配息幾次？',o:['1 次','2 次','4 次'],a:1,e:'半年配＝每半年配一次，一年共 2 次。'},
+ {q:'持有到期且發行人未違約，到期時投資人通常拿回？',o:['買入時支付的價格','債券面額','市價'],a:1,e:'到期依面額償還本金，前提是發行人沒有違約。'},
+ {q:'降息循環中，已持有的固定利率債券價格通常？',o:['有機會上漲','一定下跌','直接到期'],a:0,e:'利率下降時，既有較高票面利率的債券相對吸引，價格有機會上漲。'}
+];
+let qPool=[];
+function genQ(){ if(!qPool.length) qPool=QUIZ.map((_,i)=>i).sort(()=>Math.random()-0.5); return QUIZ[qPool.pop()]; }
+const shuffle=a=>a.map(v=>[Math.random(),v]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
+function bondQ(b){
+  const yr=m=>m.split('/')[0]+' 年';
+  const T=[
+    ['票面利率',b.cpnTxt+'%',[...BONDS.map(x=>x.cpnTxt+'%'),(b.cpn+0.5).toFixed(2)+'%',(b.cpn-0.5).toFixed(2)+'%']],
+    ['債券順位',b.rank,['優先無擔保','次順位','有擔保','永續次順位']],
+    ['S&P 評等',b.rating,['AA+','AA','A','BBB+','BB+','NA']],
+    ['到期年份',yr(b.mat),[...BONDS.map(x=>yr(x.mat)),'2030 年','2041 年']],
+    ['最低申購面額',b.min,['USD 2,000','USD 200,000','USD 10,000','USD 1,000']],
+    ['產品風險屬性',b.risk,['P1','P2','P3','P4','P5']],
+    ['YTM/YTC（%）',b.yTxt,[...BONDS.map(x=>x.yTxt),(b.ytm+0.4).toFixed(2)]]
+  ];
+  const [label,ans,pool]=T[Math.floor(Math.random()*T.length)];
+  const wrong=shuffle([...new Set(pool)].filter(v=>v!==ans)).slice(0,2);
+  const o=shuffle([ans,...wrong]);
+  return {q:`這趟你飛的「${b.name}」，${label}是？`,o,a:o.indexOf(ans),e:`「${b.name}」的${label}是 ${ans}（價格日期 ${PRICE_DATE}）。`};
+}
+function nextQ(){ return Math.random()<0.6?bondQ(B):genQ(); }
+
+const TEXT={
+ AAA:['AAA 信用最優','教科書級軟著陸，本金穩穩回收。'],
+ A:['A 穩健著陸','落地有點晃，但仍屬漂亮的投資等級。'],
+ BBB:['BBB 守住投資等級','剛好守住投資等級門檻，下次早一點點火會更穩。'],
+ BB:['BB 跌落非投資等級','火箭活下來了，但腳斷一支，評等掉到高收益區。'],
+ D:['D 違約','落地速度太快（或著陸腿沒放），火箭爆炸。'],
+ SEA:['落海 · 本金泡湯','偏離回收船掉進大海。看地面的落點圈，變綠色才在船上。']
+};
+const BASE={AAA:3000,A:2200,BBB:1500,BB:800,D:0,SEA:0};
+let totalScore=0;
+function showResult(){
+  const L=landing,ok=L.rate!=='D'&&L.rate!=='SEA';
+  const base=BASE[L.rate], fuelPts=ok?Math.round(L.fuel*10):0, coinPts=L.coins*150, center=ok?Math.max(0,Math.round((8-L.dist)*100)):0;
+  const sub=base+fuelPts+coinPts+center;totalScore=Math.round(sub*B.mult);
+  const big=$('#gBig');big.textContent=L.rate==='SEA'?'落海':L.rate;big.style.color=RATE_CLR[L.rate];big.style.fontSize=L.rate==='SEA'?'38px':'';
+  $('#gTitle').textContent=TEXT[L.rate][0];$('#gText').textContent=TEXT[L.rate][1];
+  const row=(k,v,c)=>`<dt>${k}</dt><dd${c?' class="'+c+'"':''}>${v}</dd>`, sec=t=>`<div class="sec">${t}</div>`;
+  const rateTxt=L.rate==='SEA'?'落海（本金泡湯）':L.rate==='D'?'D（違約）':L.rate;
+  $('#shNo').textContent='NO. '+String(Math.floor(Date.now()/1000)%100000).padStart(5,'0');
+  $('#sheet').innerHTML=sec('標的債券')
+    +row('債券名稱',B.name)+row('商品代號',B.code)+row('價格日期',PRICE_DATE)+row('Offer Price',B.offer.toFixed(2))+row('YTM/YTC (%)',B.yTxt)
+    +row('票面利率',B.cpnTxt+'%')+row('配息頻率',B.freq)+row('到期日',B.mat)+row('剩餘年期',B.yrs+' 年')+row('S&P 評等',B.rating)
+    +row('債券順位',B.rank)+row('產品風險屬性',B.risk)+row('最低申購面額',B.min)+row('提前買回',B.call,'note')
+    +sec('任務結果')
+    +row('任務評等',rateTxt)+row('配息入帳',L.coins+' 次，回補本金 '+L.refill+'%')+row('到期（落地）','飛行 '+L.t.toFixed(1)+' 秒')
+    +row('還本率',ok?'剩餘本金 '+Math.round(L.fuel)+'%':'0%')+row('落地速度','下降 '+L.vs.toFixed(1)+'／水平 '+L.hs.toFixed(1)+' m/s')+row('離回收船中心',L.dist.toFixed(1)+' m')
+    +sec('計分')
+    +row('評等分',base.toLocaleString())+row('配息',' +'+coinPts.toLocaleString())+row('本金結餘','+'+fuelPts.toLocaleString())+row('精準落地','+'+center.toLocaleString())
+    +row('殖利率加權','×'+B.mult.toFixed(2),'gold')+row('小計',sub.toLocaleString()+' × '+B.mult.toFixed(2)+' ＝ '+totalScore.toLocaleString(),'gold');
+  const Q=nextQ();$('#qText').textContent=Q.q;$('#qExp').hidden=true;
+  const box=$('#qOpts');box.innerHTML='';
+  Q.o.forEach((t,i)=>{const b=document.createElement('button');b.type='button';b.className='opt';b.id='opt'+i;b.textContent=t;
+    b.onclick=()=>{box.querySelectorAll('button').forEach((x,j)=>{x.disabled=true;if(j===Q.a)x.classList.add('right');});
+      if(i===Q.a){totalScore+=500;ping(880,1320,0.25,0.25);$('#qExp').textContent='答對！'+Q.e;}else{b.classList.add('wrong');$('#qExp').textContent='答錯了。'+Q.e;}
+      $('#qExp').hidden=false;updTotal();quizDone=true;lbRefresh();};
+    box.appendChild(b);});
+  updTotal();quizDone=false;submitted=false;lbRefresh();
+  $('#result').hidden=false;$('#hud').hidden=true;$('#controls').hidden=true;$('#rating').hidden=true;state='result';
+}
+function updTotal(){ $('#total').textContent=totalScore.toLocaleString();
+  if(totalScore>best){best=totalScore;try{localStorage.setItem('bondRocketBest',best);}catch(e){}} showBest(); }
+
+function start(){ initAudio(); if(AC&&AC.state==='suspended')AC.resume();
+  reset(); state='flying'; $('#menu').hidden=true;$('#pick').hidden=true;$('#result').hidden=true;$('#hud').hidden=false;$('#controls').hidden=false;$('#rating').hidden=true;
+  banner(B.name+' 出發<small>按住點火減速，移到回收船上方，看落點圈變綠</small>','',3); }
+$('#startBtn').addEventListener('click',showPick);$('#againBtn').addEventListener('click',showPick);$('#sameBtn').addEventListener('click',start);
+$('#backBtn').addEventListener('click',()=>{$('#pick').hidden=true;$('#menu').hidden=false;});
+
+/* ---------- 共用排行榜（Supabase）：在 Streamlit 版由 app.py 填入；這裡保留預留字就代表單機版 ---------- */
+const SB_URL='__SUPABASE_URL__', SB_KEY='__SUPABASE_KEY__', BOARD_ID_RAW='__BOARD_ID__';
+const BOARD_ID=BOARD_ID_RAW.startsWith('__')?'rocket-local':BOARD_ID_RAW;
+const ONLINE=/^https:\/\//.test(SB_URL)&&!SB_KEY.startsWith('__');
+let quizDone=false, submitted=false, boardBack='menu';
+const pname=$('#pname'), submitBtn=$('#submitBtn'), lbMsg=$('#lbMsg');
+try{pname.value=localStorage.getItem('bondRocketName')||'';}catch(e){}
+if(ONLINE){$('#boardBtn').hidden=false;$('#lbForm').hidden=false;}
+const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function sb(path,opt){opt=opt||{};return fetch(SB_URL+'/rest/v1/'+path,Object.assign({},opt,{headers:Object.assign({apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},opt.headers||{})}));}
+function lbRefresh(){ if(!ONLINE)return;
+  const name=pname.value.trim();
+  submitBtn.disabled=!(quizDone&&name&&!submitted);
+  if(submitted)return;
+  lbMsg.className='lbmsg';
+  lbMsg.textContent=quizDone?(name?`準備好了，按「登上排行榜」送出 ${totalScore.toLocaleString()} 分。`:'輸入名稱就能上榜。'):'先答完加碼題，分數確定後就能上榜。';}
+pname.addEventListener('input',lbRefresh);
+async function fetchBoard(){
+  const r=await sb(`rocket_scores?board_id=eq.${encodeURIComponent(BOARD_ID)}&select=name,score,bond,mission_rating&order=score.desc,created_at.asc&limit=500`);
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const rows=await r.json(),seen=new Set(),out=[];
+  for(const x of rows){if(seen.has(x.name))continue;seen.add(x.name);out.push(x);}
+  return out;}
+submitBtn.addEventListener('click',async()=>{
+  const name=pname.value.trim(); if(!name||submitted)return;
+  submitBtn.disabled=true;lbMsg.className='lbmsg';lbMsg.textContent='送出中…';
+  try{localStorage.setItem('bondRocketName',name);}catch(e){}
+  try{
+    const r=await sb('rocket_scores',{method:'POST',headers:{Prefer:'return=minimal'},
+      body:JSON.stringify({board_id:BOARD_ID,name,score:totalScore,bond:B.name,mission_rating:landing.rate==='SEA'?'落海':landing.rate})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    submitted=true;
+    const list=await fetchBoard(),rank=list.findIndex(x=>x.name===name)+1,mine=list[rank-1];
+    lbMsg.className='lbmsg ok';
+    lbMsg.innerHTML=`上榜成功！你目前第 <b>${rank}</b> 名${mine&&mine.score>totalScore?`（最佳 ${mine.score.toLocaleString()} 分）`:''}。 <a href="#" id="seeBoard" style="color:var(--coin)">看排行榜</a>`;
+    $('#seeBoard').onclick=e=>{e.preventDefault();openBoard('result');};
+  }catch(e){submitBtn.disabled=false;lbMsg.className='lbmsg bad';lbMsg.textContent='送出失敗，請檢查網路後再按一次。';}
+});
+async function openBoard(from){
+  boardBack=from;['#menu','#pick','#result'].forEach(id=>$(id).hidden=true);$('#board').hidden=false;
+  const ol=$('#ranks');ol.innerHTML='<li><span class="empty">讀取中…</span></li>';
+  try{const list=(await fetchBoard()).slice(0,20);let me='';try{me=localStorage.getItem('bondRocketName')||'';}catch(e){}
+    ol.innerHTML=list.length?list.map((x,i)=>`<li class="${x.name===me?'me':''}"><span class="rk">${i+1}</span><span class="pn">${esc(x.name)}<small>${esc(x.bond||'')} · 任務 ${esc(x.mission_rating||'')}</small></span><b>${Number(x.score).toLocaleString()}</b></li>`).join('')
+      :'<li><span class="empty">還沒有人上榜，第一名就是你的！</span></li>';
+  }catch(e){ol.innerHTML='<li><span class="empty">排行榜讀取失敗，請稍後再試。</span></li>';}
+}
+$('#boardBtn').addEventListener('click',()=>openBoard('menu'));
+$('#boardClose').addEventListener('click',()=>{$('#board').hidden=true;$('#'+boardBack).hidden=false;});
+$('#boardPlay').addEventListener('click',()=>{$('#board').hidden=true;showPick();});
+
+/* ---------- HUD ---------- */
+const hAlt=$('#hAlt'),hVs=$('#hVs'),hHs=$('#hHs'),fuelEl=$('#fuel'),fuelBar=$('#fuelbar'),hCoins=$('#hCoins'),rNow=$('#rNow');
+const rc=$('#radar'),rx=rc.getContext('2d');
+function drawRadar(){const W=rc.width,R=W/2,sc=R/130;rx.setTransform(1,0,0,1,0,0);rx.clearRect(0,0,W,W);
+  rx.strokeStyle='rgba(150,185,230,.25)';rx.lineWidth=2;[R*0.33,R*0.66,R*0.98].forEach(r=>{rx.beginPath();rx.arc(R,R,r,0,6.283);rx.stroke();});
+  const fx=camFwd.x,fz=camFwd.y;rx.setTransform(-fz,-fx,fx,-fz,R,R); // 雷達跟著鏡頭轉，上方＝畫面深處
+  rx.fillStyle='rgba(242,194,48,.85)';rx.fillRect(-DECK.hx*sc,-DECK.hz*sc,DECK.hx*2*sc,DECK.hz*2*sc);
+  let dx=(S.pos.x-ship.position.x)*sc,dz=(S.pos.z-ship.position.z)*sc;const L=Math.hypot(dx,dz),max=R-8;let edge=false;
+  if(L>max){dx*=max/L;dz*=max/L;edge=true;}
+  rx.strokeStyle='#ff7a2f';rx.lineWidth=3;rx.beginPath();rx.moveTo(dx,dz);rx.lineTo(dx+S.vel.x*sc*3,dz+S.vel.z*sc*3);rx.stroke();
+  rx.fillStyle=edge?'#ff4d5e':'#ff7a2f';rx.beginPath();rx.arc(dx,dz,7,0,6.283);rx.fill();
+  if(S.windT>0){rx.strokeStyle='#6fe0ff';rx.lineWidth=4;rx.beginPath();rx.moveTo(0,0);rx.lineTo(S.wind.x*22,S.wind.z*22);rx.stroke();}
+  rx.setTransform(1,0,0,1,0,0);
+}
+
+/* ---------- 主迴圈 ---------- */
+const clock=new THREE.Clock();const tmpV=new THREE.Vector3(),look=new THREE.Vector3(),lookT=new THREE.Vector3(),camT=new THREE.Vector3();
+let shipDir=null;const tmp2=new THREE.Vector2(),fwdT=new THREE.Vector2(0,-1),camFwd=new THREE.Vector2(0,-1);
+const CAM_NAMES=['電視轉播','追蹤俯瞰','船上鏡頭'];let camMode=0;
+try{camMode=(+localStorage.getItem('bondRocketCam')||0)%3;}catch(e){}
+const camBtn=$('#camBtn');camBtn.textContent='視角：'+CAM_NAMES[camMode];
+function nextCam(){camMode=(camMode+1)%3;camBtn.textContent='視角：'+CAM_NAMES[camMode];try{localStorage.setItem('bondRocketCam',camMode);}catch(e){}
+  if(state==='flying')banner(CAM_NAMES[camMode],'',0.9);}
+camBtn.addEventListener('click',nextCam);
+addEventListener('keydown',e=>{if(e.code==='KeyC'&&!(e.target&&e.target.tagName==='INPUT'))nextCam();});
+let menuAng=0;
+function frame(){
+  requestAnimationFrame(frame);
+  const dt=Math.min(clock.getDelta(),0.05);simT+=dt;
+  updateOcean(simT);
+  shipBob=0.35*Math.sin(simT*0.8);ship.position.y=shipBob;ship.rotation.z=0.012*Math.sin(simT*0.6);ship.rotation.x=0.008*Math.sin(simT*0.7+1);
+  beacons.forEach((b,i)=>b.visible=Math.sin(simT*4+i)>-0.2);
+  coins.forEach(c=>{if(!c.taken){c.obj.rotation.y+=dt*2.2;c.obj.position.y+=Math.sin(simT*2+c.phase)*0.02;}});
+
+  if(state==='flying'){
+    S.t+=dt;
+    const jx=Math.max(-1,Math.min(1,(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0)+joy.x));
+    const jz=Math.max(-1,Math.min(1,(keys.ArrowDown||keys.KeyS?1:0)-(keys.ArrowUp||keys.KeyW?1:0)+joy.y));
+    const wantBurn=(keys.Space||burnTouch)&&S.fuel>0;
+    S.throttle+=((wantBurn?1:0)-S.throttle)*Math.min(1,dt*10);
+    if(S.fuel>0)S.fuel=Math.max(0,S.fuel-BURN*S.throttle*dt);
+    burnEl.classList.toggle('on',wantBurn);
+    // 風暴
+    if(S.windAlts.length&&S.pos.y<S.windAlts[0]){S.windAlts.shift();const a=Math.random()*6.283,wf=2*B.wind;S.wind.set(Math.cos(a)*wf,0,Math.sin(a)*wf);S.windT=3.5;
+      banner(`⚠ 升息風暴來襲<small>剩餘 ${B.yrs} 年，利率敏感度${B.wind>=1.5?'很高，推得很用力':B.wind>=1?'中等':'低，推力較小'}，快修正！</small>`,'warn',2.6);}
+    if(S.windT>0){S.windT-=dt;if(S.windT<=0)S.wind.set(0,0,0);}
+    const drag=S.vel.y<0?0.00047*S.vel.y*S.vel.y:0;
+    const ay=-G+THRUST*S.throttle+drag;
+    // 操控以鏡頭方向為準：搖桿往上＝往畫面深處
+    const fx=camFwd.x,fz=camFwd.y,wx=jx*(-fz)-jz*fx,wz=jx*fx-jz*fz;
+    S.vel.x+=(wx*RCS+S.wind.x)*dt;S.vel.z+=(wz*RCS+S.wind.z)*dt;S.vel.y+=ay*dt;
+    S.vel.x*=1-0.35*dt;S.vel.z*=1-0.35*dt;
+    S.pos.addScaledVector(S.vel,dt);
+    const g=groundAt(S.pos.x,S.pos.z),alt=S.pos.y-g.y;
+    // 著陸腿
+    if(!S.legsOut&&alt<95){S.legsOut=true;banner('著陸腿展開','',1.4);}
+    if(S.legsOut&&S.legs<1)S.legs=Math.min(1,S.legs+dt*0.9);
+    legs.forEach(l=>l.rotation.z=LEG_F+(LEG_D-LEG_F)*(1-Math.pow(1-S.legs,2)));
+    // 點火提示
+    const vs=-S.vel.y, stopDist=vs>0?vs*vs/(2*(THRUST-G))+25:0;
+    if(!S.hinted&&vs>12&&alt<stopDist*1.35&&S.throttle<0.3&&S.fuel>0){S.hinted=true;banner('現在點火！<small>再不減速就來不及了</small>','fail',1.8);}
+    // 金幣
+    coins.forEach(c=>{if(c.taken)return;const p=c.obj.position;
+      if(Math.hypot(p.x-S.pos.x,p.z-S.pos.z)<9&&Math.abs(p.y-(S.pos.y+20))<24){c.taken=true;scene.remove(c.obj);S.coins++;S.fuel=Math.min(100,S.fuel+B.coinPct);S.refill+=B.coinPct;
+        banner(`+ 配息入帳<small>票面 ${B.cpnTxt}%，本金補回 ${B.coinPct}%</small>`,'coin',1.1);ping(880,1320,0.18,0.2);
+        for(let i=0;i<24;i++){const a=Math.random()*6.283,s=4+Math.random()*8;fire.emit(p.x,p.y,p.z,Math.cos(a)*s,(Math.random()-0.3)*s,Math.sin(a)*s,0.6,2.5,1,0.8,0.3,1,0,1);}}});
+    // 尾焰粒子
+    if(S.throttle>0.05){const n=Math.ceil(5*S.throttle);
+      for(let i=0;i<n;i++){smoke.emit(S.pos.x+(Math.random()-0.5)*2,S.pos.y-0.5,S.pos.z+(Math.random()-0.5)*2,S.vel.x+(Math.random()-0.5)*6,S.vel.y-38*S.throttle,S.vel.z+(Math.random()-0.5)*6,
+          2.2+Math.random()*1.4,3.5,0.78,0.7,0.64,0.55,7,0.9);
+        fire.emit(S.pos.x+(Math.random()-0.5),S.pos.y-0.5,S.pos.z+(Math.random()-0.5),S.vel.x+(Math.random()-0.5)*4,S.vel.y-45,S.vel.z+(Math.random()-0.5)*4,0.22,3,1,0.55,0.2,0.9,6,0.5);}}
+    // 視覺傾斜
+    S.tilt.z+=((-Math.max(-0.35,Math.min(0.35,S.vel.x*0.025+wx*0.14)))-S.tilt.z)*Math.min(1,dt*4);
+    S.tilt.x+=((Math.max(-0.35,Math.min(0.35,S.vel.z*0.025+wz*0.14)))-S.tilt.x)*Math.min(1,dt*4);
+    inner.rotation.z=S.tilt.z;inner.rotation.x=S.tilt.x;
+    // HUD
+    const hs=Math.hypot(S.vel.x,S.vel.z);
+    hAlt.innerHTML=Math.max(0,alt).toFixed(0)+'<small>m</small>';
+    hVs.innerHTML=Math.max(0,vs).toFixed(1)+'<small>m/s</small>';hVs.className='v '+(vs>9?'hot':vs>4?'mid':'ok');
+    hHs.innerHTML=hs.toFixed(1)+'<small>m/s</small>';hHs.className='v '+(hs>4.5?'hot':hs>2?'mid':'ok');
+    fuelEl.style.width=S.fuel+'%';fuelBar.classList.toggle('low',S.fuel<20);hCoins.textContent='配息 '+S.coins;
+    if(alt<220){$('#rating').hidden=false;const r=g.deck?rateOf(Math.max(0,vs),hs):'落海';rNow.textContent=r;rNow.style.color=RATE_CLR[r==='落海'?'SEA':r];}
+    marker.position.set(S.pos.x,g.y+0.35,S.pos.z);marker.material.color.set(g.deck?0x4fd6a0:0xff4d5e);marker.visible=true;
+    const sc=1+Math.min(alt,400)/120;marker.scale.set(sc,sc,sc);
+    if(S.fuel<=0&&!S._noFuel){S._noFuel=true;banner('本金燒光了！','fail',1.6);}
+    if(S.pos.y<=g.y)land();
+  } else { marker.visible=state==='flying'; burnEl.classList.remove('on'); }
+
+  if(state==='landed'){resultTimer-=dt;if(rocket.visible)S.pos.y=groundAt(S.pos.x,S.pos.z).y;if(resultTimer<=0)showResult();}
+  if(engGain)engGain.gain.value=soundOn&&state==='flying'?S.throttle*0.45:0;
+
+  rocket.position.copy(S.pos);
+  const fl=S.throttle>0.02?S.throttle*(9+Math.random()*4):0.001;
+  flame.scale.set(1,fl,1);core.scale.set(0.5,fl*0.55,0.5);flame.visible=core.visible=S.throttle>0.02;fireLight.intensity=S.throttle*3.2;
+
+  smoke.update(dt,(x,z)=>groundAt(x,z).y+0.6);fire.update(dt,null);
+
+  // 鏡頭
+  if(state==='menu'){menuAng+=dt*0.08;camT.set(Math.sin(menuAng)*150,55,Math.cos(menuAng)*150);camera.position.lerp(camT,0.05);look.set(0,8,0);
+    S.pos.set(Math.sin(menuAng*1.3)*20,140,Math.cos(menuAng*1.3)*20);}
+  else{const gY=groundAt(S.pos.x,S.pos.z).y,alt=S.pos.y-gY,k=Math.min(1,Math.max(0,alt/250));
+    const ease=1-Math.pow(0.02,dt);let fov=60;
+    if(camMode===0){ // 電視轉播：斜側面跟拍，火箭永遠在畫面中間
+      camT.set(S.pos.x+30,S.pos.y+24+4*k,S.pos.z+82+14*k);
+      lookT.set(S.pos.x,S.pos.y+16,S.pos.z);
+    }else if(camMode===1){ // 追蹤俯瞰：火箭在畫面上方，下方看得到回收船
+      camT.set(S.pos.x,S.pos.y+50+25*k,S.pos.z+78+28*k);
+      lookT.set(S.pos.x,S.pos.y-10*k,S.pos.z);
+    }else{ // 船上鏡頭：架在回收船「背對火箭」那一側，火箭和甲板上下排成一直線
+      if(!shipDir)shipDir=new THREE.Vector2(S.pos.x-ship.position.x,S.pos.z-ship.position.z).negate();
+      if(alt>120){const dx=ship.position.x-S.pos.x,dz=ship.position.z-S.pos.z,L=Math.hypot(dx,dz);
+        if(L>8){tmp2.set(dx/L,dz/L);shipDir.lerp(tmp2,Math.min(1,dt*0.8));}}
+      if(shipDir.length()<0.01)shipDir.set(0,1);shipDir.normalize();
+      camT.set(ship.position.x+shipDir.x*95,ship.position.y+32,ship.position.z+shipDir.y*95);
+      fwdT.set(-shipDir.x,-shipDir.y);
+      const c=camera.position;
+      const dA=tmpV.set(S.pos.x,S.pos.y+20,S.pos.z).sub(c).normalize().clone();
+      const dB=tmpV.set(ship.position.x,ship.position.y+DECK.top,ship.position.z).sub(c).normalize().clone();
+      const ang=Math.acos(Math.max(-1,Math.min(1,dA.dot(dB))));
+      const HALF=0.52;
+      const w=ang<2*HALF-0.12?0.5:Math.max(0,(HALF-0.06)/ang);
+      const dir=dA.multiplyScalar(1-w).add(dB.multiplyScalar(w)).normalize();
+      lookT.copy(c).addScaledVector(dir,60);
+      fov=Math.max(28,Math.min(66,(ang*180/Math.PI)*1.25+14));
+    }
+    if(camMode!==2)fwdT.set(0,-1);
+    camFwd.lerp(fwdT,Math.min(1,dt*3));if(camFwd.length()<0.01)camFwd.copy(fwdT);camFwd.normalize();
+    camT.y=Math.max(camT.y,gY+4);
+    camera.position.lerp(camT,camMode===2?Math.min(1,ease*2):ease);
+    look.lerp(lookT,Math.min(1,dt*8));
+    if(Math.abs(camera.fov-fov)>0.05){camera.fov+=(fov-camera.fov)*Math.min(1,dt*4);camera.updateProjectionMatrix();}}
+  if(state==='menu'&&camera.fov!==60){camera.fov=60;camera.updateProjectionMatrix();}
+  camera.lookAt(look);sky.position.copy(camera.position);
+
+  if(bannerT>0){bannerT-=dt;if(bannerT<=0)$('#banner').style.opacity=0;}
+  if(state==='flying'||state==='landed')drawRadar();
+  renderer.render(scene,camera);
+}
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+  const u=renderer.getPixelRatio()*h*0.866;smoke.mat.uniforms.uScale.value=u;fire.mat.uniforms.uScale.value=u;}
+addEventListener('resize',resize);resize();
+reset();state='menu';
+frame();
+})();
+</script>
+
+</body>
+</html>
