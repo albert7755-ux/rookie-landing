@@ -142,13 +142,14 @@ h1 em{font-style:normal;color:var(--coin);}
 .lb{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:10px;padding:12px;}
 .lb label{font-size:12px;color:var(--mute);}
 .lbrow{display:flex;gap:8px;}
-.lbrow input{flex:1;min-width:0;font:500 16px var(--f-body);color:var(--text);background:rgba(255,255,255,.07);border:1px solid var(--line);
+.lb input{width:100%;min-width:0;font:500 16px var(--f-body);color:var(--text);background:rgba(255,255,255,.07);border:1px solid var(--line);
   border-radius:8px;padding:10px 12px;-webkit-user-select:text;user-select:text;}
-.lbrow input:focus-visible{outline:3px solid var(--coin);outline-offset:1px;}
+.lb input:focus-visible{outline:3px solid var(--coin);outline-offset:1px;}
 .lbrow .btn{font-size:15px;padding:10px 14px;white-space:nowrap;}
 .btn:disabled{opacity:.45;cursor:default;}
 .lbmsg{font-size:12px;color:var(--mute);line-height:1.5;}
 .lbmsg.ok{color:var(--safe);} .lbmsg.bad{color:var(--fail);}
+.lb.need{border-color:var(--burn);box-shadow:0 0 0 3px rgba(255,122,47,.25);}
 .ranks{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;}
 .ranks li{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 4px;border-top:1px solid var(--line);}
 .ranks li.me{background:rgba(244,197,66,.1);}
@@ -221,6 +222,11 @@ h1 em{font-style:normal;color:var(--coin);}
       <div class="g"><b>AAA</b>≤2.5</div><div class="g"><b>A</b>≤4</div><div class="y"><b>BBB</b>≤6</div><div class="r"><b>BB</b>≤9</div><div class="r"><b>D</b>&gt;9</div>
     </div>
     <p class="lead" style="font-size:12px;margin-top:-6px">上排為任務評等，下排為落地下降速度（m/s），這是一般標準；評等越好越寬鬆，評等較低或次順位會變嚴。水平速度太大也會被降評。成功落地後還有一題債券題可以加碼。</p>
+    <div class="lb" id="nameBox" hidden>
+      <label for="pname">玩家名稱（上排行榜用，最多 12 字）</label>
+      <input id="pname" maxlength="12" autocomplete="off" placeholder="例如：西湖-阿明">
+      <div class="lbmsg" id="nameMsg">輸入名稱後就能出發，成績會自動登上排行榜。</div>
+    </div>
     <button class="btn" id="startBtn" type="button">選債券出發</button>
     <button class="btn ghost" id="boardBtn" type="button" hidden>看排行榜</button>
     <div class="best" id="bestTxt"></div>
@@ -250,9 +256,8 @@ h1 em{font-style:normal;color:var(--coin);}
       <div class="explain" id="qExp" hidden></div>
     </div>
     <div class="lb" id="lbForm" hidden>
-      <label for="pname">上榜名稱（最多 12 字）</label>
-      <div class="lbrow"><input id="pname" maxlength="12" autocomplete="off" placeholder="例如：西湖-阿明"><button class="btn" id="submitBtn" type="button" disabled>登上排行榜</button></div>
-      <div class="lbmsg" id="lbMsg">先答完加碼題，分數確定後就能上榜。</div>
+      <label>排行榜</label>
+      <div class="lbmsg" id="lbMsg"></div>
     </div>
     <div class="total"><span>本次總分</span><b id="total">0</b></div>
     <div class="best" id="bestTxt2"></div>
@@ -630,7 +635,7 @@ function showResult(){
   Q.o.forEach((t,i)=>{const b=document.createElement('button');b.type='button';b.className='opt';b.id='opt'+i;b.textContent=t;
     b.onclick=()=>{box.querySelectorAll('button').forEach((x,j)=>{x.disabled=true;if(j===Q.a)x.classList.add('right');});
       if(i===Q.a){totalScore+=500;ping(880,1320,0.25,0.25);$('#qExp').textContent='答對！'+Q.e;}else{b.classList.add('wrong');$('#qExp').textContent='答錯了。'+Q.e;}
-      $('#qExp').hidden=false;updTotal();quizDone=true;lbRefresh();};
+      $('#qExp').hidden=false;updTotal();quizDone=true;autoSubmit();};
     box.appendChild(b);});
   updTotal();quizDone=false;submitted=false;lbRefresh();
   $('#result').hidden=false;$('#hud').hidden=true;$('#controls').hidden=true;$('#rating').hidden=true;state='result';
@@ -641,7 +646,8 @@ function updTotal(){ $('#total').textContent=totalScore.toLocaleString();
 function start(){ initAudio(); if(AC&&AC.state==='suspended')AC.resume();
   reset(); state='flying'; $('#menu').hidden=true;$('#pick').hidden=true;$('#result').hidden=true;$('#hud').hidden=false;$('#controls').hidden=false;$('#rating').hidden=true;
   banner(B.name+' 出發<small>按住點火減速，移到回收船上方，看落點圈變綠</small>','',3); }
-$('#startBtn').addEventListener('click',showPick);$('#againBtn').addEventListener('click',showPick);$('#sameBtn').addEventListener('click',start);
+$('#startBtn').addEventListener('click',()=>{if(needName())return;showPick();});
+$('#againBtn').addEventListener('click',()=>{autoSubmit();showPick();});$('#sameBtn').addEventListener('click',()=>{autoSubmit();start();});
 $('#backBtn').addEventListener('click',()=>{$('#pick').hidden=true;$('#menu').hidden=false;});
 
 /* ---------- 共用排行榜（Supabase）：在 Streamlit 版由 app.py 填入；這裡保留預留字就代表單機版 ---------- */
@@ -649,44 +655,58 @@ const SB_URL='__SUPABASE_URL__', SB_KEY='__SUPABASE_KEY__', BOARD_ID_RAW='__BOAR
 const BOARD_ID=BOARD_ID_RAW.startsWith('__')?'rocket-local':BOARD_ID_RAW;
 const ONLINE=/^https:\/\//.test(SB_URL)&&!SB_KEY.startsWith('__');
 let quizDone=false, submitted=false, boardBack='menu';
-const pname=$('#pname'), submitBtn=$('#submitBtn'), lbMsg=$('#lbMsg');
+const pname=$('#pname'), lbMsg=$('#lbMsg'), nameBox=$('#nameBox'), nameMsg=$('#nameMsg'), startBtn=$('#startBtn');
+let playerName='';
 try{pname.value=localStorage.getItem('bondRocketName')||'';}catch(e){}
-if(ONLINE){$('#boardBtn').hidden=false;$('#lbForm').hidden=false;}
+if(ONLINE){$('#boardBtn').hidden=false;$('#lbForm').hidden=false;nameBox.hidden=false;}
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function sb(path,opt){opt=opt||{};return fetch(SB_URL+'/rest/v1/'+path,Object.assign({},opt,{headers:Object.assign({apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json'},opt.headers||{})}));}
-function lbRefresh(){ if(!ONLINE)return;
-  const name=pname.value.trim();
-  submitBtn.disabled=!(quizDone&&name&&!submitted);
-  if(submitted)return;
+function nameState(){ if(!ONLINE)return;
+  const ok=!!pname.value.trim();
+  startBtn.textContent=ok?'選債券出發':'先輸入名稱才能出發';
+  startBtn.disabled=!ok;
+  if(ok){nameBox.classList.remove('need');nameMsg.className='lbmsg';nameMsg.textContent='成績會自動以「'+pname.value.trim()+'」登上排行榜。';}
+  else{nameMsg.className='lbmsg';nameMsg.textContent='輸入名稱後就能出發，成績會自動登上排行榜。';}}
+function needName(){ if(!ONLINE)return false;
+  const n=pname.value.trim();
+  if(!n){nameBox.classList.add('need');nameMsg.className='lbmsg bad';nameMsg.textContent='請先輸入名稱。';pname.focus();return true;}
+  playerName=n;try{localStorage.setItem('bondRocketName',n);}catch(e){}
+  return false;}
+pname.addEventListener('input',nameState);
+pname.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();startBtn.click();}});
+nameState();
+function lbRefresh(){ if(!ONLINE||submitted)return;
   lbMsg.className='lbmsg';
-  lbMsg.textContent=quizDone?(name?`準備好了，按「登上排行榜」送出 ${totalScore.toLocaleString()} 分。`:'輸入名稱就能上榜。'):'先答完加碼題，分數確定後就能上榜。';}
-pname.addEventListener('input',lbRefresh);
+  lbMsg.textContent='答完加碼題，成績就會自動以「'+playerName+'」登上排行榜。';}
 async function fetchBoard(){
   const r=await sb(`rocket_scores?board_id=eq.${encodeURIComponent(BOARD_ID)}&select=name,score,bond,mission_rating&order=score.desc,created_at.asc&limit=500`);
   if(!r.ok)throw new Error('HTTP '+r.status);
   const rows=await r.json(),seen=new Set(),out=[];
   for(const x of rows){if(seen.has(x.name))continue;seen.add(x.name);out.push(x);}
   return out;}
-submitBtn.addEventListener('click',async()=>{
-  const name=pname.value.trim(); if(!name||submitted)return;
-  submitBtn.disabled=true;lbMsg.className='lbmsg';lbMsg.textContent='送出中…';
-  try{localStorage.setItem('bondRocketName',name);}catch(e){}
+async function autoSubmit(){
+  if(!ONLINE||submitted||!landing||!playerName)return;
+  submitted=true;const score=totalScore,name=playerName;
+  lbMsg.className='lbmsg';lbMsg.textContent='成績上傳中…';
   try{
     const r=await sb('rocket_scores',{method:'POST',headers:{Prefer:'return=minimal'},
-      body:JSON.stringify({board_id:BOARD_ID,name,score:totalScore,bond:B.name,mission_rating:landing.rate==='SEA'?'落海':landing.rate})});
+      body:JSON.stringify({board_id:BOARD_ID,name,score,bond:B.name,mission_rating:landing.rate==='SEA'?'落海':landing.rate})});
     if(!r.ok)throw new Error('HTTP '+r.status);
-    submitted=true;
     const list=await fetchBoard(),rank=list.findIndex(x=>x.name===name)+1,mine=list[rank-1];
     lbMsg.className='lbmsg ok';
-    lbMsg.innerHTML=`上榜成功！你目前第 <b>${rank}</b> 名${mine&&mine.score>totalScore?`（最佳 ${mine.score.toLocaleString()} 分）`:''}。 <a href="#" id="seeBoard" style="color:var(--coin)">看排行榜</a>`;
+    lbMsg.innerHTML=`已以「${esc(name)}」上榜（${score.toLocaleString()} 分），目前第 <b>${rank}</b> 名${mine&&mine.score>score?`（你的最佳 ${mine.score.toLocaleString()} 分）`:''}。 <a href="#" id="seeBoard" style="color:var(--coin)">看排行榜</a>`;
     $('#seeBoard').onclick=e=>{e.preventDefault();openBoard('result');};
-  }catch(e){submitBtn.disabled=false;lbMsg.className='lbmsg bad';lbMsg.textContent='送出失敗，請檢查網路後再按一次。';}
-});
+  }catch(e){
+    submitted=false;lbMsg.className='lbmsg bad';
+    lbMsg.innerHTML='成績上傳失敗。 <a href="#" id="retrySub" style="color:var(--coin)">再試一次</a>';
+    $('#retrySub').onclick=ev=>{ev.preventDefault();autoSubmit();};
+  }
+}
 async function openBoard(from){
   boardBack=from;['#menu','#pick','#result'].forEach(id=>$(id).hidden=true);$('#board').hidden=false;
   const ol=$('#ranks');ol.innerHTML='<li><span class="empty">讀取中…</span></li>';
   try{const list=(await fetchBoard()).slice(0,20);let me='';try{me=localStorage.getItem('bondRocketName')||'';}catch(e){}
-    ol.innerHTML=list.length?list.map((x,i)=>`<li class="${x.name===me?'me':''}"><span class="rk">${i+1}</span><span class="pn">${esc(x.name)}<small>${esc(x.bond||'')} · 任務 ${esc(x.mission_rating||'')}</small></span><b>${Number(x.score).toLocaleString()}</b></li>`).join('')
+    ol.innerHTML=list.length?list.map((x,i)=>`<li class="${x.name===(playerName||me)?'me':''}"><span class="rk">${i+1}</span><span class="pn">${esc(x.name)}<small>${esc(x.bond||'')} · 任務 ${esc(x.mission_rating||'')}</small></span><b>${Number(x.score).toLocaleString()}</b></li>`).join('')
       :'<li><span class="empty">還沒有人上榜，第一名就是你的！</span></li>';
   }catch(e){ol.innerHTML='<li><span class="empty">排行榜讀取失敗，請稍後再試。</span></li>';}
 }
