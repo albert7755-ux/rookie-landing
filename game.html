@@ -70,6 +70,10 @@ body{background:var(--ink);color:var(--text);font-family:var(--f-body);overflow:
 
 /* touch controls */
 #controls{margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;}
+@media (pointer:coarse){ #controls{padding-bottom:84px;} }
+#joyZone{position:fixed;left:0;top:28%;bottom:0;width:58%;pointer-events:auto;touch-action:none;}
+#joy{pointer-events:none!important;position:relative;z-index:1;}
+#burn{z-index:2;}
 #joy{pointer-events:auto;width:132px;height:132px;border-radius:50%;border:2px solid var(--line);background:rgba(8,18,36,.45);
   position:relative;touch-action:none;}
 #joy .knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;
@@ -200,7 +204,8 @@ h1 em{font-style:normal;color:var(--coin);}
   <div id="rating" hidden>此刻落地評等<b id="rNow">—</b></div>
   <div id="banner"></div>
   <div id="controls" hidden>
-    <div id="joy"><div class="knob" id="knob"></div><div class="lbl">修正位置</div></div>
+    <div id="joyZone" aria-hidden="true"></div>
+    <div id="joy"><div class="knob" id="knob"></div><div class="lbl">左半邊任一處拖曳</div></div>
     <div class="keyhint" id="keyhint" hidden><kbd>空白鍵</kbd> 點火　<kbd>W A S D</kbd>／<kbd>方向鍵</kbd> 修正位置　<kbd>C</kbd> 切換視角</div>
     <button id="burn" type="button">點火<span class="lbl">按住減速</span></button>
   </div>
@@ -469,16 +474,22 @@ addEventListener('keydown',e=>{keys[e.code]=true;if(['Space','ArrowUp','ArrowDow
 addEventListener('keyup',e=>{keys[e.code]=false;});
 const joy={x:0,y:0,id:null};
 const joyEl=$('#joy'),knob=$('#knob');
-joyEl.addEventListener('pointerdown',e=>{joy.id=e.pointerId;joyEl.setPointerCapture(e.pointerId);moveJoy(e);});
-joyEl.addEventListener('pointermove',e=>{if(e.pointerId===joy.id)moveJoy(e);});
-const endJoy=e=>{if(e.pointerId!==joy.id)return;joy.id=null;joy.x=joy.y=0;knob.style.transform='';};
-joyEl.addEventListener('pointerup',endJoy);joyEl.addEventListener('pointercancel',endJoy);
-function moveJoy(e){const r=joyEl.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);
+const joyZone=$('#joyZone');
+joyZone.addEventListener('pointerdown',e=>{
+  joy.id=e.pointerId;try{joyZone.setPointerCapture(e.pointerId);}catch(_){}
+  joyEl.style.transform='';const r=joyEl.getBoundingClientRect();
+  joy.cx=e.clientX;joy.cy=e.clientY;               // 手指按下的位置就是搖桿中心
+  joyEl.style.transform=`translate(${e.clientX-(r.left+r.width/2)}px,${e.clientY-(r.top+r.height/2)}px)`;
+  moveJoy(e);e.preventDefault();});
+joyZone.addEventListener('pointermove',e=>{if(e.pointerId===joy.id)moveJoy(e);});
+const endJoy=e=>{if(e.pointerId!==joy.id)return;joy.id=null;joy.x=joy.y=0;knob.style.transform='';joyEl.style.transform='';};
+['pointerup','pointercancel','lostpointercapture'].forEach(ev=>joyZone.addEventListener(ev,endJoy));
+function moveJoy(e){let dx=e.clientX-joy.cx,dy=e.clientY-joy.cy;
   const m=46,L=Math.hypot(dx,dy);if(L>m){dx*=m/L;dy*=m/L;}joy.x=dx/m;joy.y=dy/m;knob.style.transform=`translate(${dx}px,${dy}px)`;}
 let burnTouch=false;const burnEl=$('#burn');
 burnEl.addEventListener('pointerdown',e=>{burnTouch=true;burnEl.setPointerCapture(e.pointerId);});
 ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>burnEl.addEventListener(ev,()=>{burnTouch=false;}));
-if(!isTouch){joyEl.hidden=true;burnEl.hidden=true;$('#keyhint').hidden=false;}
+if(!isTouch){joyEl.hidden=true;joyZone.hidden=true;burnEl.hidden=true;$('#keyhint').hidden=false;}
 
 /* ---------- 遊戲狀態 ---------- */
 const S={pos:new THREE.Vector3(),vel:new THREE.Vector3(),fuel:100,throttle:0,coins:0,legs:0,legsOut:false,wind:new THREE.Vector3(),windT:0,windAlts:[],hinted:false,tilt:{x:0,z:0}};
